@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body>
+    <div class="w-[100%] h-screen flex">
+        <div class="videofeed h-screen flex flex-col bg-zinc-300 w-[70%]">
+            <div class="remotefeed bg-blue-200 h-1/2">
+                <video class="w-full h-full object-cover" id="remoteVideo" autoplay playsinline></video>
+            </div>
+            <div class="localfeed bg-red-200 h-1/2">
+                <video class="w-full h-full object-cover" id="localVideo" autoplay muted></video>
+            </div>
+        </div>
+
+        <div class="message-box h-full w-full bg-zinc-400 flex flex-col text-2xl relative">
+            <h1 class="bg-zinc-300 p-4">Chat</h1>
+            <div class="messages flex-grow overflow-auto p-4" id="messages"></div>
+            <form id="chatForm" class="absolute bottom-5 w-[70%] bg-red-300 flex">
+                <input type="text" id="messageInput" class="flex-grow px-2 py-1 border rounded"
+                    placeholder="Type a message...">
+                <button type="submit" class="bg-blue-500 px-4 py-1 text-white hover:bg-blue-400 rounded">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"
+        integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+"
+        crossorigin="anonymous"></script>
+    <script>
+        const form = document.querySelector("#chatForm");
+        const messageInput = document.querySelector("#messageInput");
+        const messagesDiv = document.querySelector("#messages");
+
+        let roomname;
+        const socket = io();
+        let dataChannel;
+
+        socket.emit('joinroom');
+
+        socket.on("joined", function (roomname) {
+            room = roomname;
+            console.log("Connection established to room:", roomname);
+            initialize();
+        });
+
+        // WebRTC logic
+        let localStream;
+        let remoteStream;
+        let peerConnection;
+        let inCall = false;
+
+        const rtcSettings = {
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        };
+
+        const initialize = async () => {
+            socket.on("signalingMessage", handleSignalingMessage);
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true
+                });
+                document.querySelector("#localVideo").srcObject = localStream;
+
+                initiateOffer();
+                inCall = true;
+            } catch (err) {
+                console.error("Rejected by browser", err);
+            }
+        };
+
+        const initiateOffer = async () => {
+            await createPeerConnection();
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit("signalingMessage", {
+                    room,
+                    message: JSON.stringify({
+                        type: "offer",
+                        offer
+                    })
+                });
+            } catch (err) {
+                console.error("Error creating offer", err);
+            }
+        };
+
+        const createPeerConnection = () => {
+            peerConnection = new RTCPeerConnection(rtcSettings);
+
+            // Set up remote stream
+            remoteStream = new MediaStream();
+            document.querySelector("#remoteVideo").srcObject = remoteStream;
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.ontrack = (event) => {
+                event.streams[0].getTracks().forEach(track => remoteStream.addTrack(track));
+            };
+
+            // Data channel setup for messaging
+            dataChannel = peerConnection.createDataChannel("chat");
+            dataChannel.onmessage = handleMessage;
+            dataChannel.onopen = () => console.log("Data channel opened");
+            dataChannel.onclose = () => console.log("Data channel closed");
+
+            peerConnection.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                dataChannel.onmessage = handleMessage;
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit("signalingMessage", {
+                        room,
+                        message: JSON.stringify({
+                            type: "candidate",
+                            candidate: event.candidate
+                        })
+                    });
+                }
+            };
+        };
+
+        const handleSignalingMessage = async (message) => {
+            const { type, offer, answer, candidate } = JSON.parse(message);
+            if (type === "offer") handleOffer(offer);
+            if (type === "answer") handleAnswer(answer);
+            if (type === "candidate" && peerConnection) {
+                await peerConnection.addIceCandidate(candidate);
+            }
+        };
+
+        const handleOffer = async (offer) => {
+            await createPeerConnection();
+            await peerConnection.setRemoteDescription(offer);
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit("signalingMessage", {
+                room,
+                message: JSON.stringify({ type: "answer", answer })
+            });
+        };
+
+        const handleAnswer = async (answer) => {
+            await peerConnection.setRemoteDescription(answer);
+        };
+
+        const handleMessage = (event) => {
+            const message = event.data;
+            displayMessage("Remote", message);
+        };
+
+        form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            if (message && dataChannel?.readyState === "open") {
+                dataChannel.send(message);
+                displayMessage("You", message);
+                messageInput.value = "";
+            }
+        });
+
+        const displayMessage = (sender, message) => {
+            const messageElement = document.createElement("div");
+            messageElement.textContent = `${sender}: ${message}`;
+            messageElement.classList.add("p-2", "my-1", sender === "You" ? "text-right" : "text-left");
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        };
+    </script>
+</body>
+
+</html>
