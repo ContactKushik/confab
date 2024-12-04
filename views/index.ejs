@@ -9,7 +9,7 @@
 </head>
 
 <body>
-    <div class="w-[100%] h-screen flex">
+    <div class="w-[100%] h-screen flex ">
 
         <div class="videofeed h-screen flex flex-col bg-zinc-300 w-[70%]">
             <div class="remotefeed bg-blue-200 h-1/2">
@@ -21,7 +21,7 @@
         </div>
 
         <div class="message-box h-full w-full bg-zinc-400 flex flex-col text-2xl relative">
-            <h1 class="flex">Online Users:<span id="no"></span></h1>
+            <h1 class="flex">Online Users : <span id="no"></span></h1>
             <button id="skip">Skip</button>
             <h1 class="bg-zinc-300 p-4">Chat</h1>
             <div class="messages flex-grow overflow-auto p-4" id="messages"></div>
@@ -40,7 +40,7 @@
         const indicator = document.querySelector('#no');
         const socket = io();
         socket.on("totalUsers", (count) => {
-            indicator.textContent = count;
+            indicator.textContent = " "+count;
         });
         
         const form = document.querySelector("#chatForm");
