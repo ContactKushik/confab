@@ -24,6 +24,9 @@ io.on("connection", (socket) => {
   console.log(`Total users connected: ${io.engine.clientsCount}.`);
   console.log(`Total rooms: ${Object.keys(rooms).length}`);
   
+  // Notify all users of the total number of online users
+  io.emit("totalUsers", io.engine.clientsCount);
+
   // Handle user joining a room
   socket.on("joinroom", () => {
     if (waitingusers.length > 0) {
@@ -66,6 +69,7 @@ io.on("connection", (socket) => {
         }
       }
     }
+      io.emit("totalUsers", io.engine.clientsCount);
   });
 
   // Handle user disconnect
@@ -123,6 +127,9 @@ io.on("connection", (socket) => {
         }
       }
     }
+
+    // Notify all users of the total number of online users after a disconnect
+    io.emit("totalUsers", io.engine.clientsCount);
   });
 
   socket.on("signalingMessage", function (data) {
