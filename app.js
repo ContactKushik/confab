@@ -17,23 +17,23 @@ app.get("/", (req, res) => {
 });
 
 let waitingusers = [];
-let rooms = []; // Store rooms as an array of objects
+let rooms = {}; // Store rooms as an object
 
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
   console.log(`Total users connected: ${io.engine.clientsCount}.`);
-  console.log(`Total rooms: ${rooms.length}`);
+  console.log(`Total rooms: ${Object.keys(rooms).length}`);
+  
   // Handle user joining a room
   socket.on("joinroom", () => {
     if (waitingusers.length > 0) {
       let partner = waitingusers.shift(); // Get the first waiting user
       const roomname = `${socket.id}-${partner.id}`;
 
-      // Create a room
-      rooms.push({
-        roomname: roomname,
+      // Create a room as an object
+      rooms[roomname] = {
         users: [socket.id, partner.id],
-      });
+      };
 
       // Join both users to the room
       socket.join(roomname);
@@ -41,18 +41,40 @@ io.on("connection", (socket) => {
 
       // Notify users of the room
       io.to(roomname).emit("joined", roomname);
-      console.log(`Room created: ${roomname}. Total rooms: ${rooms.length}`); // Log total rooms after creation
+      console.log(`Room created: ${roomname}. Total rooms: ${Object.keys(rooms).length}`); // Log total rooms after creation
     } else {
       waitingusers.push(socket);
     }
   });
 
+  socket.on("skip", (room) => {
+    console.log("skip trigger hua");
+    console.log("Room: ", room);
+
+    // Find the room object
+    const roomData = rooms[room];
+    if (roomData) {
+      const roomUsers = roomData.users;
+      // Extract the other user from the room
+      const otherUserID = roomUsers.find(id => id !== socket.id);
+      
+      // Emit 'skipped' to the other user
+      if (otherUserID) {
+        const otherUserSocket = io.sockets.sockets.get(otherUserID);
+        if (otherUserSocket) {
+          otherUserSocket.emit("skipped");
+        }
+      }
+    }
+  });
+
   // Handle user disconnect
   socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id} \n`); //
+    console.log(`User disconnected: ${socket.id} \n`);
     console.log(
-      `Total users connected: ${io.engine.clientsCount}. Total rooms: ${rooms.length}`
+      `Total users connected: ${io.engine.clientsCount}. Total rooms: ${Object.keys(rooms).length}`
     );
+
     // Remove from waitingusers if applicable
     let waitingIndex = waitingusers.findIndex(
       (waitingUser) => waitingUser.id === socket.id
@@ -64,13 +86,13 @@ io.on("connection", (socket) => {
     }
 
     // Find the room the user was part of
-    let roomIndex = rooms.findIndex((room) => room.users.includes(socket.id));
-    if (roomIndex !== -1) {
-      const room = rooms[roomIndex];
+    let roomName = Object.keys(rooms).find((room) => rooms[room].users.includes(socket.id));
+    if (roomName) {
+      const room = rooms[roomName];
       const remainingUserID = room.users.find((id) => id !== socket.id);
 
       // Remove the room
-      rooms.splice(roomIndex, 1);
+      delete rooms[roomName];
 
       // Handle the remaining user
       const remainingUserSocket = io.sockets.sockets.get(remainingUserID);
@@ -80,10 +102,9 @@ io.on("connection", (socket) => {
           const newRoomname = `${remainingUserID}-${newPartner.id}`;
 
           // Create a new room
-          rooms.push({
-            roomname: newRoomname,
+          rooms[newRoomname] = {
             users: [remainingUserID, newPartner.id],
-          });
+          };
 
           // Join both users to the new room
           remainingUserSocket.join(newRoomname);
@@ -92,20 +113,19 @@ io.on("connection", (socket) => {
           // Notify users of the new room
           io.to(newRoomname).emit("joined", newRoomname);
           console.log(
-            `New room created: ${newRoomname}. Total rooms: ${rooms.length}`
+            `New room created: ${newRoomname}. Total rooms: ${Object.keys(rooms).length}`
           ); // Log total rooms after creation
         } else {
           // Add remaining user to the waiting list
           waitingusers.push(remainingUserSocket);
           console.log(`User ${remainingUserID} added to waiting list`);
-          console.log(`Total rooms: ${rooms.length}`);
+          console.log(`Total rooms: ${Object.keys(rooms).length}`);
         }
       }
     }
   });
 
   socket.on("signalingMessage", function (data) {
-    // console.log(data.room, data.message);
     socket.broadcast.to(data.room).emit("signalingMessage", data.message);
   });
 });

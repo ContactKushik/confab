@@ -20,6 +20,7 @@
         </div>
 
         <div class="message-box h-full w-full bg-zinc-400 flex flex-col text-2xl relative">
+            <button id="skip">Skip</button>
             <h1 class="bg-zinc-300 p-4">Chat</h1>
             <div class="messages flex-grow overflow-auto p-4" id="messages"></div>
             <form id="chatForm" class="absolute bottom-5 w-[70%] bg-red-300 flex">
@@ -176,6 +177,18 @@
             messagesDiv.appendChild(messageElement);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         };
+
+        // skip feature
+
+        const skipbtn = document.querySelector("#skip");
+        skipbtn.addEventListener("click", () => {
+            socket.emit("skip",room);
+            // window.location.href = "/"; // redirect to home page after skipping
+        });
+        socket.on("skipped", () => {
+            // alert("You have been skipped");
+            window.location.href = "/";
+        });
     </script>
 </body>
 
