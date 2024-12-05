@@ -1,20 +1,32 @@
 const express = require("express");
+const cors = require("cors"); // Import cors
 const app = express();
 const path = require("path");
 
 const http = require("http");
 const socketIO = require("socket.io");
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = socketIO(server, {
+  cors: {
+    origin: [
+      "http://localhost:5173",
+      "https://5020-2409-40c4-f-2dec-7d81-afe6-eb8e-b4d2.ngrok-free.app",
+      "http://127.0.0.1:4040",
+      "https://5020-2409-40c4-f-2dec-7d81-afe6-eb8e-b4d2.ngrok-free.app", // Replace with your public URL after port forwarding
+    ], // Allow requests from localhost:5173, ngrok URL, and your public URL
+    methods: ["GET", "POST"],
+  },
+});
 
 app.set("view engine", "ejs");
+app.use(cors()); // Use cors middleware
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get("/", (req, res) => {
-  res.render("index");
-});
+// app.get("/", (req, res) => {
+//   res.render("index");
+// });
 
 let waitingusers = [];
 let rooms = {}; // Store rooms as an object
@@ -50,35 +62,16 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("skip", (room) => {
-    console.log("skip trigger hua");
-    console.log("Room: ", room);
-
+  
+  socket.on("skipped", (room) =>{
     // Find the room object
-    const roomData = rooms[room];
-    if (roomData) {
-      const roomUsers = roomData.users;
-      // Extract the other user from the room
-      const otherUserID = roomUsers.find(id => id !== socket.id);
-      
-      // Emit 'skipped' to the other user
-      if (otherUserID) {
-        const otherUserSocket = io.sockets.sockets.get(otherUserID);
-        if (otherUserSocket) {
-          otherUserSocket.emit("skipped");
-        }
-      }
-    }
-      io.emit("totalUsers", io.engine.clientsCount);
-  });
-
+    console.log(room);
+    console.log("Skipped triggered");
+    io.to(room).emit("leave");
+  })
   // Handle user disconnect
   socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id} \n`);
-    console.log(
-      `Total users connected: ${io.engine.clientsCount}. Total rooms: ${Object.keys(rooms).length}`
-    );
-
+    
     // Remove from waitingusers if applicable
     let waitingIndex = waitingusers.findIndex(
       (waitingUser) => waitingUser.id === socket.id
@@ -127,6 +120,12 @@ io.on("connection", (socket) => {
         }
       }
     }
+console.log(`User disconnected: ${socket.id} \n`);
+console.log(
+  `Total users connected: ${io.engine.clientsCount}. Total rooms: ${
+    Object.keys(rooms).length
+  }`
+);
 
     // Notify all users of the total number of online users after a disconnect
     io.emit("totalUsers", io.engine.clientsCount);
