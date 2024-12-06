@@ -137,7 +137,13 @@ console.log(
 });
 
 // Render the homepage
+app.get("/", function (req, res) {
+  res.render('index');
+});
 
+// app.get("/login",function (req, res) {
+//   res.render('login');
+// })
 // Start the server
 server.listen(process.env.PORT||3000, () => {
   console.log("Server is running on port 3000: http://localhost:3000");

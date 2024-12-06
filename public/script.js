@@ -167,10 +167,11 @@ const displayMessage = (sender, message) => {
 
 const skipbtn = document.querySelector("#skip");
 skipbtn.addEventListener("click", () => {
-  socket.emit("skip", room);
+  socket.emit("skipped", room);
   // window.location.href = "/"; // redirect to home page after skipping
 });
-socket.on("skipped", () => {
+socket.on("leave", () => {
   // alert("You have been skipped");
-  window.location.href = "/";
+  window.location.href = "/"; 
+
 });
